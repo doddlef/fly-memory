@@ -64,8 +64,8 @@ def db_check() -> None:
 # ---------------------------------------------------------------------------
 
 # Module 2
-# from flym.cli.add import add
-# cli.add_command(add)
+from flym.cli.add import add
+cli.add_command(add)
 
 # Module 5
 # from flym.cli.index import index
