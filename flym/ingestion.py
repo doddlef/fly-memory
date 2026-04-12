@@ -148,11 +148,8 @@ def add_document(
         vault_or_source_path = str(vault_abs)
 
     # --- 5. Insert content (dedup) --------------------------------------------
-    # OR IGNORE: if this hash already exists, skip — the text is already stored.
-    existing = conn.execute(
-        "SELECT hash FROM content WHERE hash = ?", (content_hash,)
-    ).fetchone()
-
+    # OR IGNORE handles the "already exists" case atomically inside SQLite.
+    # No need to SELECT first — that would be a redundant round-trip.
     conn.execute(
         "INSERT OR IGNORE INTO content(hash, doc, created_at) VALUES (?, ?, ?)",
         (content_hash, text, _now_iso()),
