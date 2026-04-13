@@ -16,7 +16,7 @@ dependencies = [
     "python-frontmatter>=1.0",
 
     # Module 4 — providers
-    "httpx>=0.27",
+    "ollama>=0.4",
 
     # Module 5 — indexing (sqlite-vec loaded as an extension, not imported)
     "sqlite-vec>=0.1",
