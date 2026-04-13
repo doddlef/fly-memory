@@ -3,17 +3,19 @@ flym.cli.search
 ---------------
 Implements `flym search "<query>"`.
 
-Search pipeline (two paths):
-  Fast path  — BM25 only, returns immediately when top result is dominant.
-  Hybrid path — BM25 + vector KNN, fused with RRF.  Used when BM25 is not
-                confident enough to early-return.
+Full pipeline (three possible paths):
+  1. BM25 early return — top result is dominant, skip everything else.
+  2. Hybrid (rephrase) — keyword query: expand synonyms for BM25, fuse with vector.
+  3. Hybrid (HyDE)     — question query: generate hypothetical answer, embed it.
 
 Examples
 --------
     flym search "JWT token"
+    flym search "how does backpropagation work"
     flym search "JWT token" --count 10
     flym search "JWT token" -c work
     flym search "JWT token" --json
+    flym search "JWT token" --no-expand   # skip LLM expansion
 """
 
 from __future__ import annotations
@@ -25,8 +27,9 @@ import click
 from flym.config import load_config
 from flym.db import connect
 from flym.indexer import ensure_virtual_tables
-from flym.providers.ollama import OllamaEmbedding
+from flym.providers.ollama import OllamaEmbedding, OllamaLLM
 from flym.search.bm25 import BM25Result, bm25_search
+from flym.search.expansion import classify, hyde, rephrase
 from flym.search.hybrid import HybridResult, hybrid_search
 
 
@@ -49,11 +52,18 @@ from flym.search.hybrid import HybridResult, hybrid_search
     default=False,
     help="Output results as a JSON array.",
 )
+@click.option(
+    "--no-expand",
+    is_flag=True,
+    default=False,
+    help="Skip LLM query expansion (faster, no Ollama LLM required).",
+)
 def search(
     query: str,
     count: int | None,
     collection: str | None,
     as_json: bool,
+    no_expand: bool,
 ) -> None:
     """Search the knowledge base for QUERY."""
     config = load_config()
@@ -68,18 +78,36 @@ def search(
             query, conn, config.search, count=n, collection=collection,
         )
 
-        if early_return or not bm25_results:
-            # Fast path: BM25 result is dominant or corpus is empty.
-            results = bm25_results
+        if early_return:
+            results   = bm25_results
             path_used = "bm25"
+
         else:
-            # Hybrid path: BM25 wasn't confident — fuse with vector search.
+            # Hybrid path — use expansion unless --no-expand was passed.
             provider = OllamaEmbedding(model=config.embedding.model)
-            hybrid_results = hybrid_search(
-                query, conn, provider, config, count=n, collection=collection,
+            bm25_query: str | None = None
+            query_vec:  list[float] | None = None
+
+            if not no_expand:
+                llm       = OllamaLLM(model=config.llm.model)
+                strategy  = classify(query)
+
+                if strategy == "hyde":
+                    hypo_doc  = hyde(query, llm, conn)
+                    query_vec = provider.embed([hypo_doc])[0]
+                    path_used = "hybrid+hyde"
+                else:
+                    bm25_query = rephrase(query, llm, conn)
+                    path_used  = "hybrid+rephrase"
+            else:
+                path_used = "hybrid"
+
+            results = hybrid_search(
+                query, conn, provider, config,
+                count=n, collection=collection,
+                bm25_query=bm25_query,
+                query_vec=query_vec,
             )
-            results = hybrid_results
-            path_used = "hybrid"
     finally:
         conn.close()
 
@@ -133,7 +161,6 @@ def _to_dict(r: BM25Result | HybridResult) -> dict:
 
 
 def _rank_hint(r: BM25Result | HybridResult) -> str:
-    """Show BM25/vector rank positions for hybrid results."""
     if not isinstance(r, HybridResult):
         return ""
     bm25 = f"B{r.bm25_rank}" if r.bm25_rank else "B-"
@@ -142,6 +169,5 @@ def _rank_hint(r: BM25Result | HybridResult) -> str:
 
 
 def _score_bar(score: float, width: int = 5) -> str:
-    """Return a small ASCII bar, e.g. '████░' for score 0.8."""
     filled = round(score * width)
     return "█" * filled + "░" * (width - filled)
