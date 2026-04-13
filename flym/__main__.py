@@ -72,8 +72,8 @@ from flym.cli.index import index
 cli.add_command(index)
 
 # Module 6
-# from flym.cli.search import search
-# cli.add_command(search)
+from flym.cli.search import search
+cli.add_command(search)
 
 # Module 10
 # from flym.cli.collections import collections

@@ -40,7 +40,7 @@ class EmbeddingConfig(BaseModel):
 
 class LLMConfig(BaseModel):
     provider: str = "ollama"        # "ollama" | "openai" | "anthropic"
-    model: str = "llama3.2"
+    model: str = "qwen3.5:9b"
 
 
 class ChunkingConfig(BaseModel):
