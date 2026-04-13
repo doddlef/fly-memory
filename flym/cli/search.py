@@ -44,6 +44,8 @@ from flym.search.pipeline import FinalResult, run_search
               help="Skip cross-encoder reranking (faster).")
 @click.option("--context", "show_context", is_flag=True, default=False,
               help="Show the full context window (prev + chunk + next) instead of excerpt.")
+@click.option("--verbose", "-v", is_flag=True, default=False,
+              help="Show pipeline stages as they run.")
 def search(
     query: str,
     count: int | None,
@@ -52,6 +54,7 @@ def search(
     no_expand: bool,
     no_rerank: bool,
     show_context: bool,
+    verbose: bool,
 ) -> None:
     """Search the knowledge base for QUERY."""
     config = load_config()
@@ -59,6 +62,11 @@ def search(
 
     embed_provider = OllamaEmbedding(model=config.embedding.model)
     llm_provider   = None if no_expand else OllamaLLM(model=config.llm.model)
+
+    log_lines: list[tuple[str, str]] = []
+
+    def _log(label: str, value: str) -> None:
+        log_lines.append((label, value))
 
     conn = connect()
     try:
@@ -73,9 +81,18 @@ def search(
             collection     = collection,
             expand         = not no_expand,
             rerank_results = not no_rerank,
+            log            = _log if verbose else None,
         )
     finally:
         conn.close()
+
+    if verbose and log_lines:
+        _DIM = "\033[2m"
+        _RST = "\033[0m"
+        click.echo()
+        for label, value in log_lines:
+            click.echo(f"  {_DIM}{label:<12}{_RST} {value}")
+        click.echo()
 
     if not results:
         click.echo("No results found.")

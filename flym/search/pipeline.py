@@ -40,6 +40,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from collections.abc import Callable
 from dataclasses import asdict, dataclass
 
 from flym.cache import cache_get, cache_set
@@ -77,6 +78,7 @@ def run_search(
     collection: str | None = None,
     expand: bool = True,
     rerank_results: bool = True,
+    log: Callable[[str, str], None] | None = None,
 ) -> list[FinalResult]:
     """
     Run the full search pipeline and return FinalResult objects.
@@ -92,18 +94,27 @@ def run_search(
     collection     : optional collection filter
     expand         : if False, skip query expansion even if llm_provider given
     rerank_results : if False, skip cross-encoder reranking
+    log            : optional callback(label, value) called at each pipeline
+                     stage — use for verbose output in the CLI
 
     Returns
     -------
     list of FinalResult, ordered best-first, length <= count
     """
+    def _log(label: str, value: str) -> None:
+        if log:
+            log(label, value)
+
     # -------------------------------------------------------------------------
     # Cache lookup — skip the entire pipeline on a hit
     # -------------------------------------------------------------------------
     cache_key = _search_cache_key(query, collection, count, expand, rerank_results)
     cached    = cache_get(cache_key, "search", conn)
     if cached is not None:
+        _log("cache", "hit")
         return [FinalResult(**r) for r in cached]
+
+    _log("cache", "miss")
 
     # -------------------------------------------------------------------------
     # Stage 1: BM25 fast path
@@ -111,6 +122,7 @@ def run_search(
     bm25_results, early_return = bm25_search(
         query, conn, config.search, count=count, collection=collection,
     )
+    _log("bm25", f"{len(bm25_results)} hits  early_return={early_return}")
 
     if early_return:
         return [
@@ -138,11 +150,17 @@ def run_search(
 
     if expand and llm_provider is not None:
         strategy = classify(query)
+        _log("expand", strategy)
+
         if strategy == "hyde":
             hypo_doc  = hyde(query, llm_provider, conn)
+            _log("hyde", hypo_doc[:120] + ("..." if len(hypo_doc) > 120 else ""))
             query_vec = embed_provider.embed([hypo_doc])[0]
         else:
             bm25_query = rephrase(query, llm_provider, conn)
+            _log("rephrase", bm25_query)
+    else:
+        _log("expand", "skipped")
 
     # -------------------------------------------------------------------------
     # Stage 3: Hybrid search — 5× candidates for the reranker
@@ -154,6 +172,7 @@ def run_search(
         bm25_query=bm25_query,
         query_vec=query_vec,
     )
+    _log("hybrid", f"{len(hybrid_results)} candidates")
 
     if not hybrid_results:
         return []
@@ -168,12 +187,13 @@ def run_search(
         excerpts = [r.excerpt for r in top_hybrid]
         ranked_indices = rerank(query, excerpts, count)
         final_hybrid = [top_hybrid[i] for i in ranked_indices]
-        # Score: use index position as a proxy (rerank returns sorted indices)
         scores = {top_hybrid[i].chunk_id: count - rank
                   for rank, i in enumerate(ranked_indices)}
+        _log("rerank", f"{len(final_hybrid)} results")
     else:
         final_hybrid = top_hybrid[:count]
         scores = {r.chunk_id: r.rrf_score for r in final_hybrid}
+        _log("rerank", "skipped")
 
     # -------------------------------------------------------------------------
     # Stage 5: Context expansion — fetch neighbouring chunks
@@ -200,7 +220,6 @@ def run_search(
         for r in final_hybrid
     ]
 
-    # Store in cache with TTL.
     cache_set(
         cache_key, [asdict(r) for r in results],
         "search", conn,
