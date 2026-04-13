@@ -44,11 +44,9 @@ the same useful expansion).  Cache hits skip the Ollama round-trip entirely.
 
 from __future__ import annotations
 
-import hashlib
-import json
 import sqlite3
-from datetime import datetime, timezone
 
+from flym.cache import cache_get, cache_set
 from flym.providers.base import LLMProvider
 
 
@@ -142,30 +140,13 @@ def _llm_cached(prompt: str, llm: LLMProvider, conn: sqlite3.Connection) -> str:
     """
     Return llm.generate(prompt), using the cache table as a persistent store.
 
-    Cache key: SHA-256 of the prompt string.
-    TTL: none (expires_at = NULL) — LLM expansions are deterministic.
-
-    On a cache hit the Ollama round-trip is skipped entirely.
-    On a miss the result is stored before returning.
+    LLM entries are permanent (no TTL) because the same prompt always
+    produces the same useful expansion.  Cache hit → no Ollama round-trip.
     """
-    key = hashlib.sha256(prompt.encode()).hexdigest()
+    cached = cache_get(prompt, "llm", conn)
+    if cached is not None:
+        return str(cached)
 
-    # Cache lookup.
-    row = conn.execute(
-        "SELECT result FROM cache WHERE hash = ? AND type = 'llm'", (key,)
-    ).fetchone()
-
-    if row is not None:
-        return json.loads(row["result"])
-
-    # Cache miss — call the LLM.
     result = llm.generate(prompt)
-
-    conn.execute(
-        "INSERT OR REPLACE INTO cache(hash, type, result, created_at, expires_at) "
-        "VALUES (?, 'llm', ?, ?, NULL)",
-        (key, json.dumps(result), datetime.now(timezone.utc).isoformat()),
-    )
-    conn.commit()
-
+    cache_set(prompt, result, "llm", conn, ttl_hours=None)
     return result

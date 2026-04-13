@@ -285,7 +285,12 @@ def chunk(
         return []
 
     # Pre-compute all break points once (not re-scanned per chunk).
+    # Merge regex breaks with AST breaks using max-score-wins at each position.
+    from flym.chunker_code import code_break_points
     all_breaks = _collect_break_points(body)
+    for pos, bp in code_break_points(body).items():
+        if pos not in all_breaks or bp.score > all_breaks[pos].score:
+            all_breaks[pos] = bp
 
     chunks: list[Chunk] = []
     start = 0

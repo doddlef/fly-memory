@@ -26,6 +26,11 @@ dependencies = [
 
     # Module 10 — file watching
     "watchfiles>=0.21",
+
+    # Module 12 — AST-aware code chunking (optional; graceful degradation if absent)
+    "tree-sitter>=0.22",
+    "tree-sitter-python>=0.22",
+    "tree-sitter-javascript>=0.22",
 ]
 
 [project.scripts]

@@ -42,6 +42,8 @@ from flym.search.pipeline import FinalResult, run_search
               help="Skip LLM query expansion.")
 @click.option("--no-rerank", is_flag=True, default=False,
               help="Skip cross-encoder reranking (faster).")
+@click.option("--context", "show_context", is_flag=True, default=False,
+              help="Show the full context window (prev + chunk + next) instead of excerpt.")
 def search(
     query: str,
     count: int | None,
@@ -49,6 +51,7 @@ def search(
     as_json: bool,
     no_expand: bool,
     no_rerank: bool,
+    show_context: bool,
 ) -> None:
     """Search the knowledge base for QUERY."""
     config = load_config()
@@ -88,8 +91,15 @@ def search(
         ranks   = _rank_hint(r)
         click.echo(f"[{i+1}] {bar}  {r.title}{section}{ranks}")
 
-        preview = r.excerpt[:200].replace("\n", " ").strip()
-        click.echo(f"     {preview}")
+        if show_context and r.context:
+            # Print full context with a separator, preserving newlines.
+            click.echo(f"     ── context ──────────────────────────")
+            for line in r.context.splitlines():
+                click.echo(f"     {line}")
+            click.echo(f"     ─────────────────────────────────────")
+        else:
+            preview = r.excerpt[:200].replace("\n", " ").strip()
+            click.echo(f"     {preview}")
         click.echo()
 
 

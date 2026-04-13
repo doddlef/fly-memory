@@ -38,9 +38,11 @@ of run_search() only see FinalResult.
 
 from __future__ import annotations
 
+import json
 import sqlite3
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 
+from flym.cache import cache_get, cache_set
 from flym.config import Config
 from flym.providers.base import EmbeddingProvider, LLMProvider
 from flym.search.bm25 import bm25_search
@@ -95,6 +97,14 @@ def run_search(
     -------
     list of FinalResult, ordered best-first, length <= count
     """
+    # -------------------------------------------------------------------------
+    # Cache lookup — skip the entire pipeline on a hit
+    # -------------------------------------------------------------------------
+    cache_key = _search_cache_key(query, collection, count, expand, rerank_results)
+    cached    = cache_get(cache_key, "search", conn)
+    if cached is not None:
+        return [FinalResult(**r) for r in cached]
+
     # -------------------------------------------------------------------------
     # Stage 1: BM25 fast path
     # -------------------------------------------------------------------------
@@ -173,7 +183,7 @@ def run_search(
         conn,
     )
 
-    return [
+    results = [
         FinalResult(
             chunk_id     = r.chunk_id,
             doc_id       = r.doc_id,
@@ -190,10 +200,32 @@ def run_search(
         for r in final_hybrid
     ]
 
+    # Store in cache with TTL.
+    cache_set(
+        cache_key, [asdict(r) for r in results],
+        "search", conn,
+        ttl_hours=config.search.cache_ttl_hours,
+    )
+    return results
+
 
 # ---------------------------------------------------------------------------
 # Context expansion helper
 # ---------------------------------------------------------------------------
+
+def _search_cache_key(
+    query: str,
+    collection: str | None,
+    count: int,
+    expand: bool,
+    rerank_results: bool,
+) -> str:
+    """Canonical string that uniquely identifies a search request."""
+    return json.dumps(
+        [query, collection, count, expand, rerank_results],
+        ensure_ascii=False,
+    )
+
 
 def _fetch_context(
     chunk_ids_and_ranks: list[tuple[int, int | None]],
