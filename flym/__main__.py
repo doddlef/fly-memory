@@ -68,8 +68,8 @@ from flym.cli.add import add
 cli.add_command(add)
 
 # Module 5
-# from flym.cli.index import index
-# cli.add_command(index)
+from flym.cli.index import index
+cli.add_command(index)
 
 # Module 6
 # from flym.cli.search import search
