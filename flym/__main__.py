@@ -76,13 +76,13 @@ from flym.cli.search import search
 cli.add_command(search)
 
 # Module 10
-# from flym.cli.collections import collections
-# from flym.cli.remove import remove, purge
-# from flym.cli.watch import watch
-# cli.add_command(collections)
-# cli.add_command(remove)
-# cli.add_command(purge)
-# cli.add_command(watch)
+from flym.cli.collections import collections
+from flym.cli.remove import purge, remove
+from flym.cli.watch import watch_cmd
+cli.add_command(collections)
+cli.add_command(remove)
+cli.add_command(purge)
+cli.add_command(watch_cmd, name="watch")
 
 
 if __name__ == "__main__":

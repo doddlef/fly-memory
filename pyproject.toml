@@ -25,7 +25,7 @@ dependencies = [
     "sentence-transformers>=3.0",
 
     # Module 10 — file watching
-    # "watchfiles>=0.21",             # uncomment when reaching Module 10
+    "watchfiles>=0.21",
 ]
 
 [project.scripts]
