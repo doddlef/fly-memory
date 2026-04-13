@@ -103,7 +103,7 @@ class OllamaLLM:
     def __init__(
         self,
         model: str = "qwen3.5:9b",
-        host: str | None = None,
+        host: str = "http://localhost:11434",
     ) -> None:
         self.model = model
         self._client = ollama.Client(host=host)
@@ -128,6 +128,7 @@ class OllamaLLM:
         response = self._client.generate(
             model=self.model,
             prompt=prompt,
+            think=False,
             options={"num_predict": max_tokens},
         )
         return response.response.strip()

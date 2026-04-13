@@ -22,7 +22,7 @@ dependencies = [
     "sqlite-vec>=0.1",
 
     # Module 9 — reranking
-    # "sentence-transformers>=3.0",   # uncomment when reaching Module 9
+    "sentence-transformers>=3.0",
 
     # Module 10 — file watching
     # "watchfiles>=0.21",             # uncomment when reaching Module 10
