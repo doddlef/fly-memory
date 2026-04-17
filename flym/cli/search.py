@@ -23,12 +23,6 @@ import json
 
 import click
 
-from flym.config import load_config
-from flym.db import connect
-from flym.indexer import ensure_virtual_tables
-from flym.providers.ollama import OllamaEmbedding, OllamaLLM
-from flym.search.pipeline import FinalResult, run_search
-
 
 @click.command("search")
 @click.argument("query")
@@ -57,6 +51,12 @@ def search(
     verbose: bool,
 ) -> None:
     """Search the knowledge base for QUERY."""
+    from flym.config import load_config
+    from flym.db import connect
+    from flym.indexer import ensure_virtual_tables
+    from flym.providers.ollama import OllamaEmbedding, OllamaLLM
+    from flym.search.pipeline import FinalResult, run_search
+
     config = load_config()
     n = count if count is not None else config.search.default_count
 

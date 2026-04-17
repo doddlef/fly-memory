@@ -12,11 +12,6 @@ Examples
 
 import click
 
-from flym.config import load_config
-from flym.db import connect
-from flym.indexer import ensure_virtual_tables, index_all, index_document
-from flym.providers.ollama import OllamaEmbedding
-
 
 @click.command("index")
 @click.option(
@@ -32,6 +27,11 @@ from flym.providers.ollama import OllamaEmbedding
 )
 def index(model: str | None, doc_id: int | None) -> None:
     """Chunk and embed documents, writing results to the vector index."""
+    from flym.config import load_config
+    from flym.db import connect
+    from flym.indexer import ensure_virtual_tables, index_all, index_document
+    from flym.providers.ollama import OllamaEmbedding
+
     config = load_config()
 
     if model:

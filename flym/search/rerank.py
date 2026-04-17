@@ -35,15 +35,17 @@ keeping it alive avoids paying that cost on every search.
 
 from __future__ import annotations
 
-from sentence_transformers import CrossEncoder
-
 _MODEL_NAME = "cross-encoder/ms-marco-MiniLM-L-6-v2"
-_encoder: CrossEncoder | None = None
+_encoder: "CrossEncoder | None" = None
 
 
-def _get_encoder() -> CrossEncoder:
+def _get_encoder() -> "CrossEncoder":
     global _encoder
     if _encoder is None:
+        # Deferred import: sentence_transformers pulls in torch (~1 GB).
+        # Importing it at module level would slow every `flym` command by
+        # 30-120 s even when reranking is never used.
+        from sentence_transformers import CrossEncoder
         _encoder = CrossEncoder(_MODEL_NAME)
     return _encoder
 
