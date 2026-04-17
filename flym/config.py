@@ -44,7 +44,7 @@ class LLMConfig(BaseModel):
 
 
 class ChunkingConfig(BaseModel):
-    target_chars: int = 1500        # ~500 tokens at 3 chars/token average
+    target_chars: int = 2100        # ~700 tokens at 3 chars/token average
     overlap_chars: int = 225        # 15% of target — overlap between adjacent chunks
     min_chars: int = 100            # chunks shorter than this are discarded
 
